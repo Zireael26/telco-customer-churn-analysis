@@ -17,10 +17,12 @@ This feature will integrate the TabNet deep learning model (using the pytorch-ta
 - Always check for and activate the correct Python virtual environment.
 - Document the process and code.
 
-## Technical Details
+
+### Technical Details
 
 - **Library**: pytorch-tabnet2 ([docs](https://tabnet.readthedocs.io/en/latest/guides.html))
 - **Data**: `data/data.csv` (Telco Customer Churn dataset)
+- **Data Handling**: Use pandas DataFrames for all data manipulation, transformation, and loading throughout the project. Prefer vectorized pandas operations over Python loops wherever possible for efficiency and clarity.
 - **Preprocessing**: Use or extend `src/preprocess/preprocess.py` for TabNet-specific requirements (categorical encoding, missing value handling).
 - **Feature Engineering**: Add new features, transformations, and encodings in `src/engineer/`.
 - **Data Exploration**: Analyze and visualize a sample of rows to understand value types and distributions.
