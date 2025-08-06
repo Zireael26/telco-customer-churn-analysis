@@ -1,8 +1,9 @@
 lime
 matplotlib
 numpy
+optuna
 pandas
-pytorch-tabnet2
 seaborn
 shap
-torch
+tensorflow
+tensorflow-metal

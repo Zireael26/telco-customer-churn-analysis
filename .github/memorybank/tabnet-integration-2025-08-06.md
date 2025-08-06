@@ -102,3 +102,41 @@ MPS investigation is closed; limitation documented.
 Next: Add model interpretability and visualization (feature importance, confusion matrix, ROC curve).
 
 This memory bank entry will be updated as the TabNet integration progresses.
+
+## Feature: TabNet Model Integration, Checkpointing, and Interpretability
+
+- Date: 2025-08-06
+- Status: Complete and validated
+- Location: src/main.py, checkpoints/, visualizations/
+
+### Summary
+- Reran the pipeline with updated code to ensure:
+  - Model checkpoint is saved as `tabnet_model.zip` (no double extension)
+  - Churn and Churn-derived columns are excluded from features
+  - SHAP and LIME feature importance plots are generated and saved
+- Confirmed that all outputs are correct and no deprecated usages or errors remain.
+
+### Challenges
+- Library appending `.zip` to checkpoint filename required explicit filename fix
+- Churn_z was being included as a feature due to z-score scaling; resolved by robust exclusion in main pipeline
+- SHAP and LIME integration required careful feature selection and output handling
+
+### Current Status
+- Model, interpretability, and outputs are correct and production-ready
+- Next: Document results, update best practices, and validate with user
+
+## Feature: TabNet TensorFlow Rebuild
+
+- Date: 2025-08-06
+- Status: TensorFlow model class scaffolded
+- Location: src/model/tabnet_tf.py
+
+### Summary
+- Scaffolded a new TabNet model class using TensorFlow/Keras, including GLU, feature transformer, attentive transformer, and main TabNet logic.
+- Model is ready for integration into the main pipeline.
+
+### Challenges
+- TensorFlow implementation is a simplified version; further tuning and validation will be needed for production use.
+
+### Current Status
+- Next: Update main pipeline to use TensorFlow TabNet model.

@@ -9,25 +9,26 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from src.model.tabnet_model import TelcoTabNet
-import torch
 import optuna
+from sklearn.model_selection import train_test_split
+from src.model.tabnet_tf import TabNet
+from tensorflow import keras
 
 def objective(trial, X_train, y_train, X_val, y_val):
     params = {
-        'n_d': trial.suggest_int('n_d', 8, 64),
-        'n_a': trial.suggest_int('n_a', 8, 64),
         'n_steps': trial.suggest_int('n_steps', 3, 10),
-        'gamma': trial.suggest_float('gamma', 1.0, 2.0),
-        'lambda_sparse': trial.suggest_float('lambda_sparse', 1e-6, 1e-2, log=True),
-        'momentum': trial.suggest_float('momentum', 0.01, 0.4),
-        'optimizer_params': dict(lr=trial.suggest_float('lr', 1e-4, 1e-2, log=True)),
+        'n_glu': trial.suggest_int('n_glu', 1, 4),
+        'decision_dim': trial.suggest_int('decision_dim', 8, 64),
+        'relaxation_factor': trial.suggest_float('relaxation_factor', 1.0, 2.0),
+        'lr': trial.suggest_float('lr', 1e-4, 1e-2, log=True),
     }
-    model = TelcoTabNet(seed=42)
-    model.fit(X_train, y_train, X_valid=X_val, y_valid=y_val, **params)
-    val_results = model.evaluate(X_val, y_val)
-    return 1.0 - (val_results['roc_auc'] if val_results['roc_auc'] is not None else 0)
+    feature_dim = X_train.shape[1]
+    output_dim = len(set(y_train))
+    model = TabNet(feature_dim=feature_dim, output_dim=output_dim, **{k: params[k] for k in params if k not in ['lr']})
+    model.compile(optimizer=keras.optimizers.Adam(learning_rate=params['lr']), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    model.fit(X_train.values, y_train.values, validation_data=(X_val.values, y_val.values), epochs=20, batch_size=256, verbose=0)
+    eval_results = model.evaluate(X_val.values, y_val.values, verbose=0)
+    return 1.0 - eval_results[1]  # maximize accuracy
 
 if __name__ == "__main__":
     # Load processed data
@@ -63,50 +64,29 @@ if __name__ == "__main__":
 
 
 
-    # --- Model Checkpoint Selection/Training ---
-    import glob
+    # --- Optuna Hyperparameter Tuning ---
+    study = optuna.create_study(direction="minimize")
+    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val), n_trials=20)
+    print("Best trial:", study.best_trial.params)
+    best_params = study.best_trial.params
+    feature_dim = X_train.shape[1]
+    output_dim = len(y_train.unique())
+    model = TabNet(feature_dim=feature_dim, output_dim=output_dim,
+                  n_steps=best_params.get('n_steps', 3),
+                  n_glu=best_params.get('n_glu', 2),
+                  decision_dim=best_params.get('decision_dim', 8),
+                  relaxation_factor=best_params.get('relaxation_factor', 1.5))
+    model.compile(optimizer=keras.optimizers.Adam(learning_rate=best_params.get('lr', 0.001)), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    print("Training TensorFlow TabNet model with best Optuna params...")
+    history = model.fit(X_train.values, y_train.values, validation_data=(X_val.values, y_val.values), epochs=50, batch_size=256)
     checkpoint_dir = "checkpoints"
     os.makedirs(checkpoint_dir, exist_ok=True)
-    checkpoint_files = sorted(glob.glob(os.path.join(checkpoint_dir, "*.zip")))
-    print("\nAvailable model checkpoints:")
-    for idx, ckpt in enumerate(checkpoint_files):
-        print(f"  [{idx}] {os.path.basename(ckpt)}")
-    print(f"  [n] Train a new model")
-    user_choice = input("Select checkpoint index to load, or 'n' to train new: ").strip()
-
-    best_params = {
-        'n_d': 18,
-        'n_a': 46,
-        'n_steps': 5,
-        'gamma': 1.5377185972039231,
-        'lambda_sparse': 2.4791381958764685e-06,
-        'momentum': 0.31119131379716436,
-        'optimizer_params': {'lr': 0.0013782495262724347}
-    }
-    device = 'cpu'
-    if user_choice.isdigit() and int(user_choice) < len(checkpoint_files):
-        model_path = checkpoint_files[int(user_choice)]
-        print(f"Loading model from {model_path}")
-        model = TelcoTabNet(seed=42, device=device)
-        fit_params = best_params.copy()
-        fit_params.pop('optimizer_params', None)
-        model.load(model_path, **fit_params)
-        trained = True
-    else:
-        print("Training new model...")
-        print(f"Using device: {device}")
-        model = TelcoTabNet(seed=42, device=device)
-        fit_params = best_params.copy()
-        fit_params.pop('optimizer_params', None)
-        model.fit(X_train, y_train, X_valid=X_val, y_valid=y_val, optimizer_params=best_params['optimizer_params'], **fit_params)
-        model_path = os.path.join(checkpoint_dir, "tabnet_model")
-        model.model.save_model(model_path)
-        print(f"Model checkpoint saved to {model_path}")
-        trained = True
+    model.save(os.path.join(checkpoint_dir, "tabnet_tf_model.keras"))
+    print(f"Model checkpoint saved to {os.path.join(checkpoint_dir, 'tabnet_tf_model.keras')}")
 
     # Evaluate
-    results = model.evaluate(X_test, y_test)
-    print("Test Results:", results)
+    eval_results = model.evaluate(X_test.values, y_test.values, verbose=2)
+    print("Test Results:", dict(zip(model.metrics_names, eval_results)))
 
     # --- Model Interpretability and Visualization ---
     import matplotlib.pyplot as plt
@@ -118,23 +98,14 @@ if __name__ == "__main__":
     os.makedirs(viz_dir, exist_ok=True)
 
     # 1. Feature Importance (TabNet)
-    if hasattr(model.model, 'feature_importances_'):
-        importances = model.model.feature_importances_
-        feature_names = X_test.columns
-        sorted_idx = np.argsort(importances)[::-1]
-        plt.figure(figsize=(12, 6))
-        sns.barplot(x=importances[sorted_idx][:20], y=np.array(feature_names)[sorted_idx][:20])
-        plt.title('Top 20 TabNet Feature Importances')
-        plt.xlabel('Importance')
-        plt.ylabel('Feature')
-        plt.tight_layout()
-        plt.savefig(os.path.join(viz_dir, "tabnet_feature_importance.png"))
-        # plt.show()
-    else:
-        print('TabNet feature importances not available.')
+    # TensorFlow TabNet does not provide feature_importances_ directly.
+    print('TensorFlow TabNet feature importances not available. Use SHAP/LIME for interpretability.')
 
     # 2. Confusion Matrix
-    cm = results['confusion_matrix']
+    from sklearn.metrics import confusion_matrix
+    y_pred = model.predict(X_test.values)
+    y_pred_labels = np.argmax(y_pred, axis=1)
+    cm = confusion_matrix(y_test.values, y_pred_labels)
     plt.figure(figsize=(6, 5))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False)
     plt.title('Confusion Matrix')
@@ -142,14 +113,13 @@ if __name__ == "__main__":
     plt.ylabel('Actual')
     plt.tight_layout()
     plt.savefig(os.path.join(viz_dir, "confusion_matrix.png"))
-    # plt.show()
 
     # 3. ROC Curve
-    y_score = model.predict_proba(X_test)[:, 1]
-    fpr, tpr, thresholds = roc_curve(y_test, y_score)
+    y_score = y_pred[:, 1] if y_pred.shape[1] > 1 else y_pred[:, 0]
+    fpr, tpr, thresholds = roc_curve(y_test.values, y_score)
     roc_auc = auc(fpr, tpr)
     plt.figure(figsize=(7, 6))
-    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.3f})')
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.3f}')
     plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
@@ -159,38 +129,13 @@ if __name__ == "__main__":
     plt.legend(loc='lower right')
     plt.tight_layout()
     plt.savefig(os.path.join(viz_dir, "roc_curve.png"))
-    # plt.show()
 
-    # --- SHAP Feature Importance for TabNet ---
-    try:
-        import shap
-        # Use a small sample for SHAP to save time
-        X_shap = X_test.sample(n=min(200, len(X_test)), random_state=42)
-        # Use the correct predict_proba function for SHAP
-        def predict_fn(X):
-            # Always pass X directly; model.predict_proba expects numpy array
-            if isinstance(X, pd.DataFrame):
-                X = X.to_numpy()
-            return model.predict_proba(X)
-        explainer = shap.KernelExplainer(predict_fn, X_shap)
-        shap_values = explainer.shap_values(X_shap, nsamples=100)
-        plt.figure(figsize=(12, 6))
-        shap.summary_plot(shap_values, X_shap, plot_type="bar", show=False)
-        plt.title("SHAP Feature Importance (TabNet)")
-        plt.tight_layout()
-        plt.savefig(os.path.join(viz_dir, "shap_feature_importance.png"))
-        plt.close()
-        print("SHAP feature importance plot saved.")
-    except ImportError:
-        print("shap library not installed. Run 'pip install shap' to enable SHAP interpretability.")
-    except Exception as e:
-        print(f"SHAP interpretability failed: {e}")
+    # SHAP interpretability disabled for speed.
 
     # --- LIME Feature Importance for TabNet ---
     try:
         import lime
         from lime.lime_tabular import LimeTabularExplainer
-        # Use a small sample for LIME to save time
         X_lime = X_test.sample(n=min(200, len(X_test)), random_state=42)
         explainer = LimeTabularExplainer(
             training_data=np.array(X_train),
@@ -198,11 +143,10 @@ if __name__ == "__main__":
             class_names=["No Churn", "Churn"],
             mode="classification"
         )
-        # Explain a single instance (first in X_lime)
         i = 0
         exp = explainer.explain_instance(
             data_row=np.array(X_lime.iloc[i]),
-            predict_fn=lambda x: model.predict_proba(x),
+            predict_fn=lambda x: model.predict(x),
             num_features=20
         )
         fig = exp.as_pyplot_figure()
