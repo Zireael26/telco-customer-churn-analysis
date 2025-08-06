@@ -12,5 +12,6 @@
 - No errors related to SHAP input type after fix, but runtime is long.
 
 ## Status
-- SHAP integration is correct and working; plots are only saved, not shown.
-- Next: Add LIME feature importance visualization for TabNet.
+- SHAP and LIME integration is correct and working; plots are only saved, not shown.
+- Outputs do not include Churn or Churn-derived columns; no target leakage.
+- Next: Document interpretability code, update best practices, and confirm with user.

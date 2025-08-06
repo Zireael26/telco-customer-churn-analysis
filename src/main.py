@@ -36,9 +36,12 @@ if __name__ == "__main__":
     # Drop rows with any NaNs
     df = df.dropna()
 
+
     # Assume 'Churn' is the target column (adjust if needed)
-    X = df.drop("Churn", axis=1)
     y = df["Churn"]
+    # Drop Churn and any Churn-derived columns from features
+    churn_cols = [col for col in df.columns if col.startswith("Churn")]
+    X = df.drop(churn_cols, axis=1)
 
     # Use pandas convert_dtypes for robust numeric conversion
     X = X.convert_dtypes()
@@ -96,7 +99,7 @@ if __name__ == "__main__":
         fit_params = best_params.copy()
         fit_params.pop('optimizer_params', None)
         model.fit(X_train, y_train, X_valid=X_val, y_valid=y_val, optimizer_params=best_params['optimizer_params'], **fit_params)
-        model_path = os.path.join(checkpoint_dir, "tabnet_model.zip")
+        model_path = os.path.join(checkpoint_dir, "tabnet_model")
         model.model.save_model(model_path)
         print(f"Model checkpoint saved to {model_path}")
         trained = True
