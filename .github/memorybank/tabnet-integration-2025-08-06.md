@@ -52,7 +52,19 @@
 - The feature engineering script was run multiple times on the same input data, producing identical outputs each time.
 - This confirms the pipeline is reproducible and robust for the current dataset and environment.
 
+
+## Feature: TabNet Model Integration & Training Pipeline
+
+- Date: 2025-08-06
+- Status: Initial implementation complete
+- Location: src/model/tabnet_model.py, src/main.py
+
+### Summary
+- Created `TelcoTabNet` class for TabNetClassifier initialization, training, and evaluation.
+- Implemented `src/main.py` to load processed data, split into train/val/test, train TabNet, and evaluate on test set.
+- Pipeline is ready for further testing, hyperparameter tuning, and interpretability steps.
+
 ### Next Steps
-- Proceed to TabNet model integration and training pipeline as per the implementation plan.
+- Test the full pipeline, tune hyperparameters, and add model interpretability/visualization as per the plan.
 
 This memory bank entry will be updated as the TabNet integration progresses.
