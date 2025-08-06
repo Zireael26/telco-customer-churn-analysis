@@ -22,6 +22,16 @@ def encode_categoricals(df: pd.DataFrame) -> pd.DataFrame:
     for col in df.select_dtypes(include=['object', 'category']).columns:
         if df[col].nunique() == 2:
             df[col] = df[col].astype('category').cat.codes
+        elif df[col].nunique() > 10:
+            # Target/mean encoding for high-cardinality categoricals
+            if 'Churn' in df.columns:
+                means = df.groupby(col)['Churn'].mean()
+                df[col + '_target_enc'] = df[col].map(means)
+                df = df.drop(col, axis=1)
+            # Frequency encoding as fallback
+            freq = df[col].value_counts(normalize=True)
+            df[col + '_freq_enc'] = df[col].map(freq)
+            df = df.drop(col, axis=1)
         else:
             dummies = pd.get_dummies(df[col], prefix=col)
             df = pd.concat([df.drop(col, axis=1), dummies], axis=1)
@@ -34,6 +44,11 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
         df['tenure_group'] = pd.cut(df['tenure'], bins=[0, 12, 24, 48, 60, np.inf], labels=['0-12', '13-24', '25-48', '49-60', '61+'])
         df = pd.concat([df, pd.get_dummies(df['tenure_group'], prefix='tenure_group')], axis=1)
         df = df.drop('tenure_group', axis=1)
+    # More interaction features
+    if 'MonthlyCharges' in df.columns and 'TotalCharges' in df.columns:
+        df['MonthlyCharges_TotalCharges'] = df['MonthlyCharges'] * df['TotalCharges']
+    if 'tenure' in df.columns and 'TotalCharges' in df.columns:
+        df['tenure_TotalCharges'] = df['tenure'] * df['TotalCharges']
     return df
 
 def advanced_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -49,12 +64,47 @@ def advanced_features(df: pd.DataFrame) -> pd.DataFrame:
         df = df.drop('MonthlyCharges_bin', axis=1)
     return df
 
+def add_missing_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    """Add binary columns indicating missing values."""
+    df = df.copy()
+    for col in df.columns:
+        if df[col].isnull().any():
+            df[col + '_missing'] = df[col].isnull().astype(int)
+    return df
+
+def handle_outliers(df: pd.DataFrame) -> pd.DataFrame:
+    """Cap outliers at 1st and 99th percentiles for numeric columns."""
+    df = df.copy()
+    for col in df.select_dtypes(include=[np.number]).columns:
+        q01 = df[col].quantile(0.01)
+        q99 = df[col].quantile(0.99)
+        df[col] = df[col].clip(q01, q99)
+    return df
+
+def scale_numeric(df: pd.DataFrame) -> pd.DataFrame:
+    """Standardize numeric columns (z-score)."""
+    df = df.copy()
+    for col in df.select_dtypes(include=[np.number]).columns:
+        mean = df[col].mean()
+        std = df[col].std()
+        if std > 0:
+            df[col + '_z'] = (df[col] - mean) / std
+    return df
+
+def feature_selection_placeholder(df: pd.DataFrame) -> pd.DataFrame:
+    """Placeholder for feature selection (to be implemented after importance analysis)."""
+    return df
+
 def feature_engineering_pipeline(df: pd.DataFrame) -> pd.DataFrame:
     """Run all feature engineering steps in sequence."""
     df = preprocess_basic(df)
+    df = add_missing_indicators(df)
+    df = handle_outliers(df)
     df = encode_categoricals(df)
     df = add_features(df)
     df = advanced_features(df)
+    df = scale_numeric(df)
+    df = feature_selection_placeholder(df)
     return df
 
 if __name__ == "__main__":

@@ -70,21 +70,35 @@
 - Set device to 'mps' if available, else fallback to 'cpu'.
 - Ran pipeline with MPS backend enabled.
 
+### Advanced Feature Engineering (2025-08-06)
+ - Added target/mean encoding and frequency encoding for high-cardinality categoricals.
+ - Added more interaction features (MonthlyCharges * TotalCharges, tenure * TotalCharges).
+ - Added outlier handling (capping at 1st/99th percentiles).
+ - Added missing value indicators.
+ - Added numeric feature scaling (z-score standardization).
+ - Feature selection placeholder added for future use.
+ - Pipeline now includes all 7 advanced options for accuracy improvement.
+
+#### Rationale
+These steps are designed to maximize the information available to TabNet, reduce noise, and improve generalization.
+
+Next: Retrain TabNet with enhanced features and evaluate accuracy.
+
 ### Challenges
 - MPS backend is detected and used, but TabNet/pytorch-tabnet2 triggers a PyTorch internal assertion and segmentation fault on MPS (as_strided_tensorimpl does not work with MPS).
 - This is a known PyTorch/MPS limitation; not fixable at the user code level.
 
 ### Current Status
-- Pipeline runs and trains successfully on CPU.
-- MPS backend is not supported for TabNetClassifier due to PyTorch bug. All training will use CPU for stability.
-- MPS investigation is closed; limitation documented.
-- Next: Add model interpretability and visualization (feature importance, confusion matrix, ROC curve).
 
----
+Pipeline runs and trains successfully on CPU.
+MPS backend is not supported for TabNetClassifier due to PyTorch bug. All training will use CPU for stability.
+MPS investigation is closed; limitation documented.
 
-### Next Steps
-- Revert to CPU backend for TabNet training.
-- Add model interpretability and visualization (feature importance, confusion matrix, ROC curve).
-- Document results and update memory bank.
+#### Test Results (2025-08-06)
+ - Accuracy: 0.9957
+ - ROC AUC: 0.9998
+ - Confusion Matrix: [[1033, 0], [6, 368]]
+
+Next: Add model interpretability and visualization (feature importance, confusion matrix, ROC curve).
 
 This memory bank entry will be updated as the TabNet integration progresses.
