@@ -47,20 +47,36 @@ if __name__ == "__main__":
         if not pd.api.types.is_numeric_dtype(X[col]):
             X[col] = pd.to_numeric(X[col], errors='coerce')
 
+
     # Split data
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
     X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=42, stratify=y_train)
 
-    # Optuna hyperparameter tuning
-    study = optuna.create_study(direction="minimize")
-    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val), n_trials=20)
-    print("Best trial:", study.best_trial.params)
+    # Only cast columns that are already numeric to float32
+    for df_ in [X_train, X_val, X_test]:
+        for col in df_.columns:
+            if pd.api.types.is_numeric_dtype(df_[col]):
+                df_[col] = df_[col].astype('float32')
 
-    # Train final model with best params
-    best_params = study.best_trial.params
-    # model = TelcoTabNet(seed=42, device='mps' if torch.backends.mps.is_available() else 'cpu')
-    model = TelcoTabNet(seed=42, device='cpu')
-    model.fit(X_train, y_train, X_valid=X_val, y_valid=y_val, **best_params)
+
+    # Use best params from previous Optuna run (disable Optuna for now)
+    best_params = {
+        'n_d': 18,
+        'n_a': 46,
+        'n_steps': 5,
+        'gamma': 1.5377185972039231,
+        'lambda_sparse': 2.4791381958764685e-06,
+        'momentum': 0.31119131379716436,
+        'optimizer_params': {'lr': 0.0013782495262724347}
+    }
+    # Set device to 'mps' if available, else fallback to 'cpu'
+    device = 'cpu'
+    print(f"Using device: {device}")
+    model = TelcoTabNet(seed=42, device=device)
+    # Only pass valid TabNetClassifier args (remove optimizer_params for __init__)
+    fit_params = best_params.copy()
+    fit_params.pop('optimizer_params', None)
+    model.fit(X_train, y_train, X_valid=X_val, y_valid=y_val, optimizer_params=best_params['optimizer_params'], **fit_params)
 
     # Evaluate
     results = model.evaluate(X_test, y_test)

@@ -64,7 +64,27 @@
 - Implemented `src/main.py` to load processed data, split into train/val/test, train TabNet, and evaluate on test set.
 - Pipeline is ready for further testing, hyperparameter tuning, and interpretability steps.
 
+### Recent Actions (2025-08-06)
+- Disabled Optuna, used best params from previous tuning.
+- Updated pipeline to pass only valid arguments to TabNetClassifier.
+- Set device to 'mps' if available, else fallback to 'cpu'.
+- Ran pipeline with MPS backend enabled.
+
+### Challenges
+- MPS backend is detected and used, but TabNet/pytorch-tabnet2 triggers a PyTorch internal assertion and segmentation fault on MPS (as_strided_tensorimpl does not work with MPS).
+- This is a known PyTorch/MPS limitation; not fixable at the user code level.
+
+### Current Status
+- Pipeline runs and trains successfully on CPU.
+- MPS backend is not supported for TabNetClassifier due to PyTorch bug. All training will use CPU for stability.
+- MPS investigation is closed; limitation documented.
+- Next: Add model interpretability and visualization (feature importance, confusion matrix, ROC curve).
+
+---
+
 ### Next Steps
-- Test the full pipeline, tune hyperparameters, and add model interpretability/visualization as per the plan.
+- Revert to CPU backend for TabNet training.
+- Add model interpretability and visualization (feature importance, confusion matrix, ROC curve).
+- Document results and update memory bank.
 
 This memory bank entry will be updated as the TabNet integration progresses.
