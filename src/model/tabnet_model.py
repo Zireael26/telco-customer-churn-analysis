@@ -5,7 +5,7 @@ This module provides a class to initialize, train, and evaluate a TabNetClassifi
 """
 import numpy as np
 import pandas as pd
-from pytorch_tabnet.tab_model import TabNetClassifier
+from pytorch_tabnet import TabNetClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix
 import torch
@@ -13,7 +13,13 @@ import torch
 class TelcoTabNet:
     def __init__(self, seed: int = 42, device: str = None):
         self.seed = seed
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        # Always respect explicit device argument
+        if device is not None:
+            self.device = device
+        elif torch.cuda.is_available():
+            self.device = "cuda"
+        else:
+            self.device = "cpu"
         self.model = None
 
     def fit(self, X, y, X_valid=None, y_valid=None, **kwargs):
